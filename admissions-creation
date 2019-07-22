@@ -1,0 +1,143 @@
+
+
+use "...\hes170418.dta", clear
+
+keep if _merge==3
+
+keep if epistat == 3
+
+sort eid epistart epiorder epiend
+
+
+destring admisorc, replace
+clonevar admimeth_num=admimeth
+replace admimeth_num="" if admimeth=="2A" 
+destring admimeth_num, replace
+destring disdest, replace
+
+gsort eid epistart epiorder epiend transit admidate disdate 
+
+
+
+drop if admidate==.
+
+duplicates drop eid epistart epiorder epiend transit, force
+
+						
+
+sort eid admidate  epistart epiend
+
+gen admission=0
+replace admission =1 if eid == eid[_n-1] &	admidate!=admidate[_n-1]
+recode admission (0=1) if eid!=eid[_n-1]
+
+
+recode admission (1=0) if eid == eid[_n-1] & epistart==epiend[_n-1] 
+
+//Next need to account for transfers so  need gsort 
+
+gsort eid epistart epiorder epiend transit admidate disdate 
+
+
+gen check =1 if (eid == eid[_n-1] &	epistart <= (epiend[_n-1]+2) & ((disdest[_n-1]>=51 & disdest[_n-1]<=53) |(admisorc>=51 & admisorc<=53) |  admimeth_num==81)) &admission==1
+
+recode admission (1=0) if (eid == eid[_n-1] &	epistart <= (epiend[_n-1]+2) & ((disdest[_n-1]>=51 & disdest[_n-1]<=53) |(admisorc>=51 & admisorc<=53) |  admimeth_num==81))
+
+//Accounting for classpat
+
+/*
+
+What NHS Digital says about classpat 
+
+"Regular attender episodes (classpat = ‘3’ and ‘4’) are considered as separate units of care that 
+should not be linked to other episodes and therefore are excluded from the episode ordering criteria shown below – they form single episode provider spells."
+
+*/
+
+
+recode admission (0=1) if classpat=="3"|classpat=="4"
+
+
+//Create summary data 
+
+sort eid admidate  epistart epiend
+
+
+gen index_date_admission=admidate if admission==1
+format index_date_admission %td
+egen total_adm=total(admission), by(eid)
+
+//Save the file
+
+save "...\admissions130818.dta", replace
+
+
+
+//////Use the admissions dataset, link to pheno dataset
+
+cd "...data\"
+
+
+
+use "...admissions130818.dta", clear
+
+drop date_attend_assessment
+
+rename _merge admission_merge
+
+rename eid n_eid
+
+//Comment - needed to code sex as 1/2 for Grouper, but it is naturally coded as 0 (female) and 1 in Biobank: http://biobank.ctsu.ox.ac.uk/crystal/coding.cgi?id=9
+
+recode sex (1=0) (2=1) 
+
+
+merge m:1 n_eid using  bmi_obs_analysis200818.dta,  force
+
+*destring date_attend_assessment
+
+/*Notes in Stata from the merge
+
+"variable date_attend_assessment was double in the using data, but will be str10 now)
+(note: variable epistart was str9 in the using data, but will be float now)"
+
+So we need to convert date_attend_assessment back into a proper date variable
+
+
+*/
+
+format date_attend %td
+
+gen date_attend_baseline=date_attend
+replace date_attend_baseline=date_attend_assessment if admission==. & date_attend==.
+format date_attend_baseline %td
+
+
+
+save admissions_pheno_191218b.dta, replace
+
+use admissions_pheno_191218b.dta, clear
+
+drop disdate-notes_to_oper0
+drop leap_year-month_28_days
+drop string_month_of_birth-admission_merge
+drop admisorc_transit-length_diag_20
+drop oldbmiobsmerge-decimal_days
+drop procodet-provspno
+drop classpat-tretspef
+drop category-notes_to_diag10
+
+save admissions_pheno_191218b.dta, replace
+
+//Sanity check - comparing nonzero cost with admission==1
+
+tab admission nonzero_cost, m
+
+
+//Export as .csv
+
+export delimited admissions_pheno_191218b.csv, replace
+
+
+
+
