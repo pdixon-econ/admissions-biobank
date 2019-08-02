@@ -1,6 +1,6 @@
 
 
-use "...\hes170418.dta", clear
+use "...hes170418.dta", clear
 
 keep if _merge==3
 
@@ -11,7 +11,7 @@ sort eid epistart epiorder epiend
 
 destring admisorc, replace
 clonevar admimeth_num=admimeth
-replace admimeth_num="" if admimeth=="2A" 
+replace admimeth_num="" if admimeth=="2A" //CHECK THE ELECTRONIC NOTES FROM YORK AND CHECK TO MAKE SURE THERE ARE NO OTHER ALPHANUMERICS IN THERE
 destring admimeth_num, replace
 destring disdest, replace
 
@@ -49,8 +49,8 @@ recode admission (1=0) if (eid == eid[_n-1] &	epistart <= (epiend[_n-1]+2) & ((d
 
 What NHS Digital says about classpat 
 
-"Regular attender episodes (classpat = ‘3’ and ‘4’) are considered as separate units of care that 
-should not be linked to other episodes and therefore are excluded from the episode ordering criteria shown below – they form single episode provider spells."
+"Regular attender episodes (classpat = â€˜3â€™ and â€˜4â€™) are considered as separate units of care that 
+should not be linked to other episodes and therefore are excluded from the episode ordering criteria shown below â€“ they form single episode provider spells."
 
 */
 
@@ -69,32 +69,31 @@ egen total_adm=total(admission), by(eid)
 
 //Save the file
 
-save "...\admissions130818.dta", replace
+save "Y...admissions130818.dta", replace
 
 
 
 //////Use the admissions dataset, link to pheno dataset
 
-cd "...data\"
+cd ...
 
 
 
-use "...admissions130818.dta", clear
+use "Y...admissions130818.dta", clear
 
-drop date_attend_assessment
+
 
 rename _merge admission_merge
 
 rename eid n_eid
 
+//We are getting problems with merge. eg sex is creating a third category
 //Comment - needed to code sex as 1/2 for Grouper, but it is naturally coded as 0 (female) and 1 in Biobank: http://biobank.ctsu.ox.ac.uk/crystal/coding.cgi?id=9
 
-recode sex (1=0) (2=1) 
+recode sex (1=0) (2=1) //check coding in the files prepared for the goruper
 
-
+.
 merge m:1 n_eid using  bmi_obs_analysis200818.dta,  force
-
-*destring date_attend_assessment
 
 /*Notes in Stata from the merge
 
@@ -106,17 +105,16 @@ So we need to convert date_attend_assessment back into a proper date variable
 
 */
 
-format date_attend %td
-
-gen date_attend_baseline=date_attend
-replace date_attend_baseline=date_attend_assessment if admission==. & date_attend==.
-format date_attend_baseline %td
 
 
+gen date_attend_assessment_new = date(date_attend_assessment, "DMY")
+format date_attend_assessment_new %td
+drop date_attend_assessment
+rename date_attend_assessment_new date_attend_assessment
 
-save admissions_pheno_191218b.dta, replace
+save admissions_pheno_141218.dta, replace
 
-use admissions_pheno_191218b.dta, clear
+use admissions_pheno_141218.dta, clear
 
 drop disdate-notes_to_oper0
 drop leap_year-month_28_days
@@ -127,16 +125,35 @@ drop procodet-provspno
 drop classpat-tretspef
 drop category-notes_to_diag10
 
-save admissions_pheno_191218b.dta, replace
+save admissions_pheno_191218.dta, replace
 
 //Sanity check - comparing nonzero cost with admission==1
 
 tab admission nonzero_cost, m
 
+*This tabulation picks up cases where admission is zero but there are non zero cost because
+*some admissions are rightly zero but for same individual can still have non-zero cost for their other admissions
+*for those with admission==0 and nonzero_cost==1, there is no total cost figure because cost data are not ok
+*su cost_per if admission==0 &cost_ok==0 ie there are no admissions recorded for when cost data not ok
+
+*edit if admission==1 &cost_per==0 &cost_ok==1 //this has zero unit cost, so no issues
+*edit if admission==1 & cost_per==. & cost_ok==1 //No observations
+
+
+
+
+
+//14 December - on balance, seems to be  consistency between admissions and cost 
+
+*compare to old version
+
+*cf _all using admissions_pheno_061218.dta
 
 //Export as .csv
 
-export delimited admissions_pheno_191218b.csv, replace
+
+
+export delimited admissions_pheno_191218.csv, replace
 
 
 
