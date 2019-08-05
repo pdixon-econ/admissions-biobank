@@ -90,7 +90,7 @@ rename eid n_eid
 //We are getting problems with merge. eg sex is creating a third category
 //Comment - needed to code sex as 1/2 for Grouper, but it is naturally coded as 0 (female) and 1 in Biobank: http://biobank.ctsu.ox.ac.uk/crystal/coding.cgi?id=9
 
-recode sex (1=0) (2=1) //check coding in the files prepared for the goruper
+recode sex (1=0) (2=1) 
 
 .
 merge m:1 n_eid using  bmi_obs_analysis200818.dta,  force
